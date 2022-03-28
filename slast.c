@@ -6,20 +6,41 @@
 #include <unistd.h>
 #include <time.h>
 #include <arpa/inet.h>
+#include <ctype.h>
+#include <stdbool.h>
+
+bool is_positive_integer(char arg[]){
+    if(arg[0] == '-') return false;
+    for(int i = 0; arg[i] != 0; i++){
+        if(!isdigit(arg[i])) return false;
+    }
+    return true;
+}
 
 int main(int argc, char *argv[])
 {
     if (argc != 2)
     {
-        perror("Error: wrong syntax.\n Input X (number of rows to be printed)\n");
+        perror("Error: wrong syntax. \nInput X (number of rows to be printed).\n");
         exit(-1);
     }
+
     int X = atoi(argv[1]);
 
     int fd;
     struct utmp utmp_record, disconnect_record;
     int size = sizeof(struct utmp);
-    int finished = 0;
+    bool finished = false;
+    bool show_all = false;
+
+    // verify argument integrity
+    if(!is_positive_integer(argv[1])) {
+        perror("Error: wrong input. \nX must be a positive integer.\n");
+        exit(-1);
+    }
+
+    if (X == 0) show_all = true;
+    
 
     // open file descriptor
     fd = open(WTMP_FILE, O_RDONLY);
@@ -32,11 +53,11 @@ int main(int argc, char *argv[])
     // move fd pointer to last entry
     lseek(fd, -size, SEEK_END);
     // iterate entries
-    for (int i = 0; (i < X) && (!finished); i++)
+    for (int i = 0; ((show_all) && (!finished)) || ((i < X) && (!finished)); i++)
     {
         // check if reading the first entry
         if(lseek(fd, 0, SEEK_CUR) == 0){
-            finished = 1;
+            finished = true;
         }
 
         if (read(fd, &utmp_record, size) == size)
@@ -45,15 +66,15 @@ int main(int argc, char *argv[])
             if (utmp_record.ut_type == USER_PROCESS)
             {
                 // user
-                printf("%s\t", utmp_record.ut_user);
+                printf("%-8.8s ", utmp_record.ut_user);
 
                 // line
-                printf("%s\t\t", utmp_record.ut_line);
+                printf("%-12.12s ", utmp_record.ut_line);
 
                 // ip address
                 struct in_addr ip;
                 ip.s_addr = utmp_record.ut_addr_v6[0];
-                printf("%s\t", inet_ntoa(ip));
+                printf("%-17.17s", inet_ntoa(ip));
 
                 // connect time
                 time_t start_time = utmp_record.ut_tv.tv_sec;
@@ -84,7 +105,7 @@ int main(int argc, char *argv[])
                     }
                 }
                 if(!found){
-                    printf("Not found logout\n");
+                    printf("Logout not found\n");
                 }
 
                 // return the offset to its current offset
